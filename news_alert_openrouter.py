@@ -44,7 +44,7 @@ rss_feeds = [
     "https://tuoitre.vn/rss/thoi-su.rss",
     "https://tuoitre.vn/rss/phap-luat.rss",
 
-    # Lao Động
+    # Lao Động (lưu ý: có thể timeout trên GitHub Actions)
     "https://laodong.vn/rss/tin-moi-nhat.rss",
     "https://laodong.vn/rss/thoi-su.rss",
     "https://laodong.vn/rss/phap-luat.rss",
@@ -54,7 +54,7 @@ rss_feeds = [
     "https://thanhnien.vn/rss/phap-luat.rss",
     "https://thanhnien.vn/rss/kinh-te.rss",
 
-    # VOV (cần đúng slug có số)
+    # VOV
     "https://vov.vn/rss/tin-moi-nhat.rss",
     "https://vov.vn/rss/thoi-su-1.rss",
     "https://vov.vn/rss/phap-luat-5.rss",
@@ -64,9 +64,10 @@ rss_feeds = [
     "https://nhandan.vn/rss/thoi-su.rss",
     "https://nhandan.vn/rss/phap-luat.rss",
 
-    # CafeF: giữ 1 feed “tin mới” cho chắc (nhiều feed con 404)
+    # CafeF
     "https://cafef.vn/rss/tin-moi-nhat.rss",
 ]
+
 # ================== KEYWORD GROUPS ==================
 group1 = ["công ty", "doanh nghiệp", "vietinbank"]
 group2 = ["truy tố", "khởi tố", "tạm giam", "phá sản", "bị bắt", "qua đời", "bỏ trốn", "lừa đảo"]
@@ -155,17 +156,14 @@ def parse_rss_with_headers(feed_url: str):
         return None
 
 # ------------------ Email (SMTP) ------------------
-def send_email_smtp(subject: str, body: str, to_addr: str):
+def send_email_smtp_html(subject: str, html_body: str, to_addr: str):
     """
-    Gửi email bằng SMTP chuẩn của Gmail.
-    Yêu cầu:
-      - EMAIL_USER: địa chỉ Gmail
-      - EMAIL_PASS: App Password 16 ký tự (không phải mật khẩu đăng nhập)
+    Gửi email HTML bằng SMTP Gmail.
     """
     if not EMAIL_USER or not EMAIL_PASS:
         raise RuntimeError("Thiếu EMAIL_USER/EMAIL_PASS trong ENV.")
 
-    msg = MIMEText(body, _charset="utf-8")
+    msg = MIMEText(html_body, "html", _charset="utf-8")
     msg["Subject"] = subject
     msg["From"] = EMAIL_USER
     msg["To"] = to_addr
@@ -212,7 +210,10 @@ def main():
 
                 subject = f'THỜI BÁO KTKSKB - "{title}"'
 
-html_body = f"""
+                # Chuẩn hóa tóm tắt cho HTML
+                safe_summary = (article_summary or "").replace("\n", "<br/>")
+
+                html_body = f"""
 <div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.6; color: #111;">
   <p><em><strong>Kính gửi:</strong> Anh/Chị,</em></p>
 
@@ -225,20 +226,20 @@ html_body = f"""
   </p>
 
   <p><em><strong>Tóm tắt:</strong></em><br/>
-     {article_summary.replace('\n', '<br/>')}
+     {safe_summary}
   </p>
 
   <p>Chúc Anh/Chị ngày làm việc hiệu quả 😊</p>
 </div>
 """
 
-try:
-    send_email_smtp_html(subject, html_body, EMAIL_TO)
-    print("  ✓ Đã gửi cảnh báo thành công!")
-    save_sent_hash(hash_str)
-    sent_hashes.add(hash_str)
-except Exception as e:
-    print(f"  ✗ Lỗi gửi email: {e}")
+                try:
+                    send_email_smtp_html(subject, html_body, EMAIL_TO)
+                    print("  ✓ Đã gửi cảnh báo thành công!")
+                    save_sent_hash(hash_str)
+                    sent_hashes.add(hash_str)
+                except Exception as e:
+                    print(f"  ✗ Lỗi gửi email: {e}")
 
         time.sleep(PER_FEED_DELAY_SEC)
 
