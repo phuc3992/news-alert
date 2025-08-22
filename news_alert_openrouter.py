@@ -7,16 +7,15 @@ import smtplib
 from email.mime.text import MIMEText
 from newspaper import Article
 
-# ============== Cấu hình qua ENV (KHÔNG hardcode) ==============
+# ================== ENV CONFIG (KHÔNG hardcode) ==================
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")           # sk-or-...
 EMAIL_USER         = os.getenv("EMAIL_USER")                    # ví dụ: you@gmail.com
 EMAIL_PASS         = os.getenv("EMAIL_PASS")                    # Gmail App Password 16 ký tự
 EMAIL_TO           = os.getenv("EMAIL_TO", EMAIL_USER)          # có thể trùng EMAIL_USER
 
-# Thời gian giữa các RSS (giảm tải)
 PER_FEED_DELAY_SEC = 0.5
 
-# ============== Nguồn RSS ==============
+# ================== RSS FEEDS ==================
 rss_feeds = [
     # VnExpress
     "https://vnexpress.net/rss/tin-moi-nhat.rss",
@@ -68,7 +67,7 @@ rss_feeds = [
     "https://nhandan.vn/rss/phap-luat.rss",
 ]
 
-# ============== Bộ lọc từ khóa (3 nhóm) ==============
+# ================== KEYWORD GROUPS ==================
 group1 = ["công ty", "doanh nghiệp", "vietinbank"]
 group2 = ["truy tố", "khởi tố", "tạm giam", "phá sản", "bị bắt", "qua đời", "bỏ trốn"]
 group3 = [
@@ -77,16 +76,16 @@ group3 = [
     "Thanh Hóa", "Nghệ An", "Hà Tĩnh", "Quảng Bình", "Quảng Trị"
 ]
 
-# ============== Lưu trạng thái bài đã gửi (trong run hiện tại) ==============
+# ================== STATE ==================
 sent_hashes_file = "sent_hashes.txt"
 
-# ============== HTTP Headers cho RSS & bài viết ==============
+# ================== HEADERS ==================
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
     "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
 }
 
-# ------------- Utils -------------
+# ------------------ Utils ------------------
 def match_3_groups(title: str, summary: str, g1, g2, g3) -> bool:
     text = (title + " " + summary).lower()
     return (
@@ -107,22 +106,19 @@ def save_sent_hash(hash_str: str):
 
 def ai_summarize(text: str, max_sentences: int = 10) -> str:
     """
-    Tóm tắt bằng OpenRouter Chat Completions. Nếu lỗi, trả thông báo ngắn để email vẫn gửi được.
+    Tóm tắt bằng OpenRouter. Nếu lỗi, trả thông báo ngắn để email vẫn gửi được.
     """
     if not OPENROUTER_API_KEY:
         return "Không có OPENROUTER_API_KEY (ENV). Bỏ qua tóm tắt AI."
 
     url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
     prompt = (
         f"Bạn là biên tập viên báo Việt. Tóm tắt nội dung dưới đây bằng tiếng Việt, ngắn gọn khoảng {max_sentences} câu, "
         f"giữ số liệu và tên riêng:\n\n{text}\n\nTóm tắt:"
     )
     data = {
-        "model": "mistralai/mistral-7b-instruct",   # có thể thay model khác trên OpenRouter
+        "model": "mistralai/mistral-7b-instruct",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 800,
         "temperature": 0.2
@@ -158,9 +154,13 @@ def parse_rss_with_headers(feed_url: str):
         print(f"  Lỗi tải RSS {feed_url}: {e}")
         return None
 
+# ------------------ Email (SMTP) ------------------
 def send_email_smtp(subject: str, body: str, to_addr: str):
     """
-    Gửi email bằng SMTP chuẩn. Cần EMAIL_USER và EMAIL_PASS (App Password).
+    Gửi email bằng SMTP chuẩn của Gmail.
+    Yêu cầu:
+      - EMAIL_USER: địa chỉ Gmail
+      - EMAIL_PASS: App Password 16 ký tự (không phải mật khẩu đăng nhập)
     """
     if not EMAIL_USER or not EMAIL_PASS:
         raise RuntimeError("Thiếu EMAIL_USER/EMAIL_PASS trong ENV.")
@@ -175,11 +175,10 @@ def send_email_smtp(subject: str, body: str, to_addr: str):
         server.login(EMAIL_USER, EMAIL_PASS)
         server.send_message(msg)
 
-# ------------- Main -------------
+# ------------------ Main ------------------
 def main():
     print("Bắt đầu quét tin tức...")
 
-    # Kiểm tra ENV căn bản
     if not EMAIL_USER or not EMAIL_PASS:
         print("Thiếu EMAIL_USER/EMAIL_PASS trong ENV. Dừng.")
         return
@@ -202,7 +201,6 @@ def main():
             if not title or not link:
                 continue
 
-            # Hash dựa trên title+summary để hạn chế trùng trong 1 run
             hash_str = hashlib.md5((title + summary).encode("utf-8")).hexdigest()
             if hash_str in sent_hashes:
                 continue
