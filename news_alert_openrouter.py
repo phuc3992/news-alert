@@ -210,24 +210,35 @@ def main():
                 print("  Đang tóm tắt nội dung bằng AI...")
                 article_summary = summarize_article_ai(link, max_sentences=10)
 
-                subject = f'KTKSNB CẬP NHẬT - "{title}"'
-                body = f"""Kính gửi: Anh/Chị,
+                subject = f'THỜI BÁO KTKSKB - "{title}"'
 
-Tổ hiện đại hóa phòng KTKSNB kính gửi anh/chị thông tin bài báo:
-"{title}"
+html_body = f"""
+<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.6; color: #111;">
+  <p><em><strong>Kính gửi:</strong> Anh/Chị,</em></p>
 
-Link bài báo: {link}
+  <p>Tổ hiện đại hóa phòng KTKSNB kính gửi anh/chị thông tin bài báo:
+     <strong>"{title}"</strong>
+  </p>
 
-Tóm tắt:
-{article_summary}
+  <p><em><strong>Link bài báo:</strong></em><br/>
+     <a href="{link}" target="_blank" rel="noopener noreferrer">{link}</a>
+  </p>
+
+  <p><em><strong>Tóm tắt:</strong></em><br/>
+     {article_summary.replace('\n', '<br/>')}
+  </p>
+
+  <p>Chúc Anh/Chị ngày làm việc hiệu quả 😊</p>
+</div>
 """
-                try:
-                    send_email_smtp(subject, body, EMAIL_TO)
-                    print("  ✓ Đã gửi cảnh báo thành công!")
-                    save_sent_hash(hash_str)
-                    sent_hashes.add(hash_str)
-                except Exception as e:
-                    print(f"  ✗ Lỗi gửi email: {e}")
+
+try:
+    send_email_smtp_html(subject, html_body, EMAIL_TO)
+    print("  ✓ Đã gửi cảnh báo thành công!")
+    save_sent_hash(hash_str)
+    sent_hashes.add(hash_str)
+except Exception as e:
+    print(f"  ✗ Lỗi gửi email: {e}")
 
         time.sleep(PER_FEED_DELAY_SEC)
 
