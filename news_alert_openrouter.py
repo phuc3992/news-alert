@@ -17,7 +17,7 @@ PER_FEED_DELAY_SEC = 0.5
 
 # ================== RSS FEEDS ==================
 rss_feeds = [
-    # VnExpress
+    # VnExpress (ổn định)
     "https://vnexpress.net/rss/tin-moi-nhat.rss",
     "https://vnexpress.net/rss/thoi-su.rss",
     "https://vnexpress.net/rss/kinh-doanh.rss",
@@ -27,53 +27,53 @@ rss_feeds = [
     "https://vnexpress.net/rss/suc-khoe.rss",
     "https://vnexpress.net/rss/giao-duc.rss",
     "https://vnexpress.net/rss/du-lich.rss",
-    # CafeF
-    "https://cafef.vn/rss/tin-moi-nhat.rss",
-    "https://cafef.vn/rss/thoi-su.rss",
-    "https://cafef.vn/rss/kinh-te.rss",
-    "https://cafef.vn/rss/phap-luat.rss",
+
     # Dân Trí
     "https://dantri.com.vn/rss/tin-moi-nhat.rss",
-    "https://dantri.com.vn/rss/su-kien.rss",
     "https://dantri.com.vn/rss/xa-hoi.rss",
     "https://dantri.com.vn/rss/phap-luat.rss",
+    "https://dantri.com.vn/rss/kinh-doanh.rss",
+
     # Vietnamnet
     "https://vietnamnet.vn/rss/tin-moi-nhat.rss",
     "https://vietnamnet.vn/rss/thoi-su.rss",
     "https://vietnamnet.vn/rss/phap-luat.rss",
+
     # Tuổi Trẻ
     "https://tuoitre.vn/rss/tin-moi-nhat.rss",
     "https://tuoitre.vn/rss/thoi-su.rss",
     "https://tuoitre.vn/rss/phap-luat.rss",
+
     # Lao Động
     "https://laodong.vn/rss/tin-moi-nhat.rss",
     "https://laodong.vn/rss/thoi-su.rss",
     "https://laodong.vn/rss/phap-luat.rss",
-    # Đời sống & Pháp luật
-    "https://baodansinh.vn/rss/tin-moi-nhat.rss",
-    "https://baodansinh.vn/rss/thoi-su.rss",
-    "https://baodansinh.vn/rss/phap-luat.rss",
+
     # Thanh Niên
-    "https://thanhnien.vn/rss/viet-nam.rss",
     "https://thanhnien.vn/rss/thoi-su.rss",
     "https://thanhnien.vn/rss/phap-luat.rss",
-    # VOV
+    "https://thanhnien.vn/rss/kinh-te.rss",
+
+    # VOV (cần đúng slug có số)
     "https://vov.vn/rss/tin-moi-nhat.rss",
     "https://vov.vn/rss/thoi-su-1.rss",
     "https://vov.vn/rss/phap-luat-5.rss",
+
     # Nhân Dân
     "https://nhandan.vn/rss/tin-moi-nhat.rss",
     "https://nhandan.vn/rss/thoi-su.rss",
     "https://nhandan.vn/rss/phap-luat.rss",
-]
 
+    # CafeF: giữ 1 feed “tin mới” cho chắc (nhiều feed con 404)
+    "https://cafef.vn/rss/tin-moi-nhat.rss",
+]
 # ================== KEYWORD GROUPS ==================
 group1 = ["công ty", "doanh nghiệp", "vietinbank"]
-group2 = ["truy tố", "khởi tố", "tạm giam", "phá sản", "bị bắt", "qua đời", "bỏ trốn"]
+group2 = ["truy tố", "khởi tố", "tạm giam", "phá sản", "bị bắt", "qua đời", "bỏ trốn", "lừa đảo"]
 group3 = [
     "Yên Bái", "Bắc Kạn", "Tuyên Quang", "Lào Cai", "Lai Châu", "Điện Biên", "Cao Bằng", "Sơn La", "Hà Giang", "Lạng Sơn",
     "Thái Nguyên", "Phú Thọ", "Vĩnh Phúc", "Hòa Bình", "Bắc Giang", "Bắc Ninh", "Thái Bình", "Nam Định", "Hà Nam", "Ninh Bình",
-    "Thanh Hóa", "Nghệ An", "Hà Tĩnh", "Quảng Bình", "Quảng Trị"
+    "Thanh Hóa", "Nghệ An", "Hà Tĩnh", "Quảng Bình", "Quảng Trị", "Huế"
 ]
 
 # ================== STATE ==================
