@@ -1,22 +1,57 @@
 name: News Alert Cron
+
 on:
   schedule:
-    - cron: "*/15 * * * *"   # chạy mỗi 15 phút
-  workflow_dispatch:         # cho phép chạy tay
+    - cron: "*/15 * * * *"   # chạy mỗi 15 phút (UTC)
+  workflow_dispatch:          # cho phép bấm Run workflow thủ công
+
+concurrency:
+  group: news-alert
+  cancel-in-progress: false   # không hủy run trước (tránh trùng nhưng vẫn hàng đợi)
+
 jobs:
-  run:
+  run-news-alert:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      # Các ENV cần thiết cho script
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      EMAIL_USER: ${{ secrets.EMAIL_USER }}
+      EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+      GIST_ID: ${{ secrets.GIST_ID }}
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install deps
-        run: pip install -r requirements.txt
-      - name: Run script
-        env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          EMAIL_TO:   ${{ secrets.EMAIL_TO }}
-        run: python news_alert_openrouter.py
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests feedparser newspaper3k beautifulsoup4 lxml cssselect tldextract
+
+      - name: Download NLTK data for newspaper3k
+        run: |
+          python - <<'PY'
+          import nltk
+          try:
+              nltk.download('punkt', quiet=True)
+          except Exception:
+              pass
+          # Một số môi trường cần 'punkt_tab'
+          try:
+              nltk.download('punkt_tab', quiet=True)
+          except Exception:
+              pass
+          PY
+
+      - name: Run news alert script
+        run: |
+          python news_alert_openrouter.py

@@ -7,11 +7,16 @@ import smtplib
 from email.mime.text import MIMEText
 from newspaper import Article
 
-# ================== ENV CONFIG (KHÔNG hardcode) ==================
+# ================== ENV CONFIG ==================
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")           # sk-or-...
 EMAIL_USER         = os.getenv("EMAIL_USER")                    # ví dụ: you@gmail.com
 EMAIL_PASS         = os.getenv("EMAIL_PASS")                    # Gmail App Password 16 ký tự
 EMAIL_TO           = os.getenv("EMAIL_TO", EMAIL_USER)          # có thể trùng EMAIL_USER
+
+# Gist để lưu hash bài đã gửi (tránh gửi trùng giữa các lần chạy)
+GIST_TOKEN = os.getenv("GIST_TOKEN")                            # GitHub PAT (scope: gist)
+GIST_ID    = os.getenv("GIST_ID")                               # ID của Gist
+GIST_FILE  = "sent_hashes.txt"                                  # Tên file trong Gist
 
 PER_FEED_DELAY_SEC = 0.5
 
@@ -44,7 +49,7 @@ rss_feeds = [
     "https://tuoitre.vn/rss/thoi-su.rss",
     "https://tuoitre.vn/rss/phap-luat.rss",
 
-    # Lao Động (lưu ý: có thể timeout trên GitHub Actions)
+    # Lao Động (có thể timeout trên GitHub Actions tùy thời điểm)
     "https://laodong.vn/rss/tin-moi-nhat.rss",
     "https://laodong.vn/rss/thoi-su.rss",
     "https://laodong.vn/rss/phap-luat.rss",
@@ -77,16 +82,79 @@ group3 = [
     "Thanh Hóa", "Nghệ An", "Hà Tĩnh", "Quảng Bình", "Quảng Trị", "Huế"
 ]
 
-# ================== STATE ==================
-sent_hashes_file = "sent_hashes.txt"
-
 # ================== HEADERS ==================
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
     "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
 }
 
-# ------------------ Utils ------------------
+# ============= Persist hashes qua GitHub Gist =============
+def _gist_headers():
+    if not GIST_TOKEN:
+        raise RuntimeError("Thiếu GIST_TOKEN (ENV).")
+    return {
+        "Authorization": f"token {GIST_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+def load_sent_hashes():
+    """
+    Đọc danh sách hash đã gửi từ Gist. Nếu không có GIST_ID/TOKEN hoặc lỗi,
+    sẽ fallback đọc file local 'sent_hashes.txt' nếu tồn tại.
+    """
+    # Nếu chưa cấu hình Gist -> dùng file local (tùy chọn)
+    if not GIST_ID or not GIST_TOKEN:
+        print("Cảnh báo: không có GIST_ID/GIST_TOKEN -> chỉ nhớ local (nếu có).")
+        if os.path.exists("sent_hashes.txt"):
+            with open("sent_hashes.txt", "r", encoding="utf-8") as f:
+                return set(line.strip() for line in f if line.strip())
+        return set()
+
+    try:
+        url = f"https://api.github.com/gists/{GIST_ID}"
+        r = requests.get(url, headers=_gist_headers(), timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        files = data.get("files", {})
+        content = files.get(GIST_FILE, {}).get("content", "")
+        hashes = set(line.strip() for line in content.splitlines() if line.strip())
+        print(f"Nạp {len(hashes)} hash từ Gist.")
+        return hashes
+    except Exception as e:
+        print(f"Cảnh báo: không tải được Gist: {e}. Sẽ dùng file local tạm.")
+        if os.path.exists("sent_hashes.txt"):
+            with open("sent_hashes.txt", "r", encoding="utf-8") as f:
+                return set(line.strip() for line in f if line.strip())
+        return set()
+
+def save_sent_hash(hash_str: str, current_hashes: set):
+    """
+    Thêm hash mới vào tập đã gửi, ghi local dự phòng và cập nhật Gist (nếu có).
+    """
+    current_hashes.add(hash_str)
+
+    # Ghi local dự phòng
+    try:
+        with open("sent_hashes.txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(sorted(current_hashes)))
+    except Exception:
+        pass
+
+    # Cập nhật Gist nếu có token/id
+    if not GIST_ID or not GIST_TOKEN:
+        return
+    try:
+        url = f"https://api.github.com/gists/{GIST_ID}"
+        new_content = "\n".join(sorted(current_hashes))
+        payload = {"files": {GIST_FILE: {"content": new_content}}}
+        r = requests.patch(url, headers=_gist_headers(), json=payload, timeout=30)
+        r.raise_for_status()
+        print("Đã cập nhật Gist với hash mới.")
+    except Exception as e:
+        print(f"Cảnh báo: không ghi được Gist: {e}")
+
+# ------------------ Lọc điều kiện ------------------
 def match_3_groups(title: str, summary: str, g1, g2, g3) -> bool:
     text = (title + " " + summary).lower()
     return (
@@ -95,20 +163,8 @@ def match_3_groups(title: str, summary: str, g1, g2, g3) -> bool:
         any(kw.lower() in text for kw in g3)
     )
 
-def load_sent_hashes():
-    if not os.path.exists(sent_hashes_file):
-        return set()
-    with open(sent_hashes_file, "r", encoding="utf-8") as f:
-        return set(line.strip() for line in f)
-
-def save_sent_hash(hash_str: str):
-    with open(sent_hashes_file, "a", encoding="utf-8") as f:
-        f.write(hash_str + "\n")
-
+# ------------------ Tóm tắt AI ------------------
 def ai_summarize(text: str, max_sentences: int = 10) -> str:
-    """
-    Tóm tắt bằng OpenRouter. Nếu lỗi, trả thông báo ngắn để email vẫn gửi được.
-    """
     if not OPENROUTER_API_KEY:
         return "Không có OPENROUTER_API_KEY (ENV). Bỏ qua tóm tắt AI."
 
@@ -122,7 +178,7 @@ def ai_summarize(text: str, max_sentences: int = 10) -> str:
         "model": "mistralai/mistral-7b-instruct",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 800,
-        "temperature": 0.2
+        "temperature": 0.2,
     }
     try:
         r = requests.post(url, headers=headers, json=data, timeout=45)
@@ -146,6 +202,7 @@ def summarize_article_ai(url: str, max_sentences: int = 10) -> str:
     except Exception:
         return "Không lấy được nội dung chi tiết."
 
+# ------------------ RSS ------------------
 def parse_rss_with_headers(feed_url: str):
     try:
         r = requests.get(feed_url, headers=HEADERS, timeout=20)
@@ -181,8 +238,9 @@ def main():
         print("Thiếu EMAIL_USER/EMAIL_PASS trong ENV. Dừng.")
         return
 
+    # Đọc hash đã gửi (từ Gist hoặc local)
     sent_hashes = load_sent_hashes()
-    print(f"Đã tải {len(sent_hashes)} bài đã gửi trước đó (chỉ hiệu lực trong lần chạy này).")
+    print(f"Đã tải {len(sent_hashes)} hash bài đã gửi trước đó.")
 
     for i, feed_url in enumerate(rss_feeds, 1):
         print(f"Đang quét RSS {i}/{len(rss_feeds)}: {feed_url}")
@@ -199,7 +257,8 @@ def main():
             if not title or not link:
                 continue
 
-            hash_str = hashlib.md5((title + summary).encode("utf-8")).hexdigest()
+            # Dùng link làm khóa duy nhất (ổn định)
+            hash_str = hashlib.md5(link.encode("utf-8")).hexdigest()
             if hash_str in sent_hashes:
                 continue
 
@@ -210,7 +269,6 @@ def main():
 
                 subject = f'THỜI BÁO KTKSKB - "{title}"'
 
-                # Chuẩn hóa tóm tắt cho HTML
                 safe_summary = (article_summary or "").replace("\n", "<br/>")
 
                 html_body = f"""
@@ -236,8 +294,8 @@ def main():
                 try:
                     send_email_smtp_html(subject, html_body, EMAIL_TO)
                     print("  ✓ Đã gửi cảnh báo thành công!")
-                    save_sent_hash(hash_str)
-                    sent_hashes.add(hash_str)
+                    # Lưu hash vào Gist/local để lần sau không gửi lại
+                    save_sent_hash(hash_str, sent_hashes)
                 except Exception as e:
                     print(f"  ✗ Lỗi gửi email: {e}")
 
