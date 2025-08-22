@@ -7,15 +7,15 @@ on:
 
 concurrency:
   group: news-alert
-  cancel-in-progress: false   # không hủy run trước (tránh trùng nhưng vẫn hàng đợi)
+  cancel-in-progress: false   # không hủy run trước
 
 jobs:
   run-news-alert:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     env:
-      # Các ENV cần thiết cho script
+      # Secrets/ENV cho script
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       EMAIL_USER: ${{ secrets.EMAIL_USER }}
       EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
@@ -32,24 +32,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install dependencies (with lxml_html_clean fix)
         run: |
           python -m pip install --upgrade pip
-          pip install requests feedparser newspaper3k beautifulsoup4 lxml cssselect tldextract
+          # Pin một số phiên bản ổn định và cài lxml_html_clean để tránh lỗi ImportError
+          pip install "lxml>=5.2.0" lxml_html_clean
+          pip install requests feedparser "newspaper3k==0.2.8" beautifulsoup4 cssselect tldextract
 
       - name: Download NLTK data for newspaper3k
         run: |
           python - <<'PY'
           import nltk
-          try:
-              nltk.download('punkt', quiet=True)
-          except Exception:
-              pass
-          # Một số môi trường cần 'punkt_tab'
-          try:
-              nltk.download('punkt_tab', quiet=True)
-          except Exception:
-              pass
+          for pkg in ['punkt', 'punkt_tab']:
+              try:
+                  nltk.download(pkg, quiet=True)
+              except Exception:
+                  pass
           PY
 
       - name: Run news alert script
