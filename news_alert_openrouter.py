@@ -214,7 +214,7 @@ def parse_rss_with_headers(feed_url: str):
 # ------------------ Email (template + gửi) ------------------
 def template_subject(title: str) -> str:
     # Bạn có thể đổi tiêu đề tại đây
-    return f'THỜI BÁO KTKSKB - "{title}"'
+    return f'THỜI BÁO KTKSNB - "{title}"'
 
 def template_body(title: str, link: str, article_summary: str) -> str:
     # Đổi format email body theo ý bạn tại đây (HTML)
