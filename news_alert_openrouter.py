@@ -70,7 +70,7 @@ rss_feeds = [
     "https://nhandan.vn/rss/phap-luat.rss",
 
     # CafeF
-    "https://cafef.vn/rss/tin-moi-nhat.rss",
+    "https://cafef.vn/xa-hoi.rss",
 
     # Bổ sung theo yêu cầu
     # Người Lao Động
@@ -91,7 +91,7 @@ rss_feeds = [
 group1 = ["công ty", "doanh nghiệp", "vietinbank"]
 group2 = [
     "truy tố", "khởi tố", "tạm giam", "phá sản", "bị bắt", "qua đời", "bỏ trốn", "lừa đảo",
-    "khám xét", "đánh bạc", "ma túy"
+    "khám xét", "đánh bạc"
 ]
 # Yêu cầu mới: bỏ nhóm 3 (không lọc theo địa phương)
 # => chỉ lọc theo group1 & group2
