@@ -83,7 +83,8 @@ rss_feeds = [
     "https://vneconomy.vn/feed",
     # Báo Chính Phủ
     "https://baochinhphu.vn/rss/home.rss",
-    "https://baochinhphu.vn/rss/phap-luat.rss",
+    "https://baochinhphu.vn/xa-hoi/phap-luat.rss"
+    ,
 ]
 
 # ================== KEYWORD GROUPS ==================
