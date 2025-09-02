@@ -8,21 +8,21 @@ from email.mime.text import MIMEText
 from newspaper import Article
 
 # ================== ENV CONFIG ==================
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")           # sk-or-...
-EMAIL_USER         = os.getenv("EMAIL_USER")                    # ví dụ: you@gmail.com
-EMAIL_PASS         = os.getenv("EMAIL_PASS")                    # Gmail App Password 16 ký tự
-EMAIL_TO           = os.getenv("EMAIL_TO", EMAIL_USER)          # có thể trùng EMAIL_USER
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+EMAIL_USER         = os.getenv("EMAIL_USER")            # ví dụ: you@gmail.com
+EMAIL_PASS         = os.getenv("EMAIL_PASS")            # Gmail App Password 16 ký tự
+EMAIL_TO           = os.getenv("EMAIL_TO", EMAIL_USER)
 
-# Gist để lưu hash bài đã gửi (tránh gửi trùng giữa các lần chạy)
-GIST_TOKEN = os.getenv("GIST_TOKEN")                            # GitHub PAT (scope: gist)
-GIST_ID    = os.getenv("GIST_ID")                               # ID của Gist
-GIST_FILE  = "sent_hashes.txt"                                  # Tên file trong Gist
+# Gist để lưu hash bài đã gửi (tránh gửi lặp)
+GIST_TOKEN = os.getenv("GIST_TOKEN")                    # GitHub PAT (scope: gist)
+GIST_ID    = os.getenv("GIST_ID")                       # ID của Gist
+GIST_FILE  = "sent_hashes.txt"                          # tên file trong Gist
 
 PER_FEED_DELAY_SEC = 0.5
 
 # ================== RSS FEEDS ==================
 rss_feeds = [
-    # VnExpress (ổn định)
+    # VnExpress
     "https://vnexpress.net/rss/tin-moi-nhat.rss",
     "https://vnexpress.net/rss/thoi-su.rss",
     "https://vnexpress.net/rss/kinh-doanh.rss",
@@ -49,7 +49,7 @@ rss_feeds = [
     "https://tuoitre.vn/rss/thoi-su.rss",
     "https://tuoitre.vn/rss/phap-luat.rss",
 
-    # Lao Động (có thể timeout trên GitHub Actions tùy thời điểm)
+    # Lao Động
     "https://laodong.vn/rss/tin-moi-nhat.rss",
     "https://laodong.vn/rss/thoi-su.rss",
     "https://laodong.vn/rss/phap-luat.rss",
@@ -71,16 +71,29 @@ rss_feeds = [
 
     # CafeF
     "https://cafef.vn/rss/tin-moi-nhat.rss",
+
+    # Bổ sung theo yêu cầu
+    # Người Lao Động
+    "https://nld.com.vn/rss/home.rss",
+    "https://nld.com.vn/rss/phap-luat.rss",
+    # Tiền Phong
+    "https://tienphong.vn/rss/xa-hoi-2.rss",
+    "https://tienphong.vn/rss/phap-luat-12.rss",
+    # VnEconomy
+    "https://vneconomy.vn/feed",
+    # Báo Chính Phủ
+    "https://baochinhphu.vn/rss/home.rss",
+    "https://baochinhphu.vn/rss/phap-luat.rss",
 ]
 
 # ================== KEYWORD GROUPS ==================
 group1 = ["công ty", "doanh nghiệp", "vietinbank"]
-group2 = ["truy tố", "khởi tố", "tạm giam", "phá sản", "bị bắt", "qua đời", "bỏ trốn", "lừa đảo"]
-group3 = [
-    "Yên Bái", "Bắc Kạn", "Tuyên Quang", "Lào Cai", "Lai Châu", "Điện Biên", "Cao Bằng", "Sơn La", "Hà Giang", "Lạng Sơn",
-    "Thái Nguyên", "Phú Thọ", "Vĩnh Phúc", "Hòa Bình", "Bắc Giang", "Bắc Ninh", "Thái Bình", "Nam Định", "Hà Nam", "Ninh Bình",
-    "Thanh Hóa", "Nghệ An", "Hà Tĩnh", "Quảng Bình", "Quảng Trị", "Huế"
+group2 = [
+    "truy tố", "khởi tố", "tạm giam", "phá sản", "bị bắt", "qua đời", "bỏ trốn", "lừa đảo",
+    "khám xét", "đánh bạc", "ma túy"
 ]
+# Yêu cầu mới: bỏ nhóm 3 (không lọc theo địa phương)
+# => chỉ lọc theo group1 & group2
 
 # ================== HEADERS ==================
 HEADERS = {
@@ -99,18 +112,12 @@ def _gist_headers():
     }
 
 def load_sent_hashes():
-    """
-    Đọc danh sách hash đã gửi từ Gist. Nếu không có GIST_ID/TOKEN hoặc lỗi,
-    sẽ fallback đọc file local 'sent_hashes.txt' nếu tồn tại.
-    """
-    # Nếu chưa cấu hình Gist -> dùng file local (tùy chọn)
     if not GIST_ID or not GIST_TOKEN:
         print("Cảnh báo: không có GIST_ID/GIST_TOKEN -> chỉ nhớ local (nếu có).")
         if os.path.exists("sent_hashes.txt"):
             with open("sent_hashes.txt", "r", encoding="utf-8") as f:
                 return set(line.strip() for line in f if line.strip())
         return set()
-
     try:
         url = f"https://api.github.com/gists/{GIST_ID}"
         r = requests.get(url, headers=_gist_headers(), timeout=30)
@@ -129,19 +136,12 @@ def load_sent_hashes():
         return set()
 
 def save_sent_hash(hash_str: str, current_hashes: set):
-    """
-    Thêm hash mới vào tập đã gửi, ghi local dự phòng và cập nhật Gist (nếu có).
-    """
     current_hashes.add(hash_str)
-
-    # Ghi local dự phòng
     try:
         with open("sent_hashes.txt", "w", encoding="utf-8") as f:
             f.write("\n".join(sorted(current_hashes)))
     except Exception:
         pass
-
-    # Cập nhật Gist nếu có token/id
     if not GIST_ID or not GIST_TOKEN:
         return
     try:
@@ -155,12 +155,11 @@ def save_sent_hash(hash_str: str, current_hashes: set):
         print(f"Cảnh báo: không ghi được Gist: {e}")
 
 # ------------------ Lọc điều kiện ------------------
-def match_3_groups(title: str, summary: str, g1, g2, g3) -> bool:
+def match_groups(title: str, summary: str, g1, g2) -> bool:
     text = (title + " " + summary).lower()
     return (
         any(kw.lower() in text for kw in g1) and
-        any(kw.lower() in text for kw in g2) and
-        any(kw.lower() in text for kw in g3)
+        any(kw.lower() in text for kw in g2)
     )
 
 # ------------------ Tóm tắt AI ------------------
@@ -212,66 +211,15 @@ def parse_rss_with_headers(feed_url: str):
         print(f"  Lỗi tải RSS {feed_url}: {e}")
         return None
 
-# ------------------ Email (SMTP) ------------------
-def send_email_smtp_html(subject: str, html_body: str, to_addr: str):
-    """
-    Gửi email HTML bằng SMTP Gmail.
-    """
-    if not EMAIL_USER or not EMAIL_PASS:
-        raise RuntimeError("Thiếu EMAIL_USER/EMAIL_PASS trong ENV.")
+# ------------------ Email (template + gửi) ------------------
+def template_subject(title: str) -> str:
+    # Bạn có thể đổi tiêu đề tại đây
+    return f'THỜI BÁO KTKSKB - "{title}"'
 
-    msg = MIMEText(html_body, "html", _charset="utf-8")
-    msg["Subject"] = subject
-    msg["From"] = EMAIL_USER
-    msg["To"] = to_addr
-
-    with smtplib.SMTP("smtp.gmail.com", 587, timeout=60) as server:
-        server.starttls()
-        server.login(EMAIL_USER, EMAIL_PASS)
-        server.send_message(msg)
-
-# ------------------ Main ------------------
-def main():
-    print("Bắt đầu quét tin tức...")
-
-    if not EMAIL_USER or not EMAIL_PASS:
-        print("Thiếu EMAIL_USER/EMAIL_PASS trong ENV. Dừng.")
-        return
-
-    # Đọc hash đã gửi (từ Gist hoặc local)
-    sent_hashes = load_sent_hashes()
-    print(f"Đã tải {len(sent_hashes)} hash bài đã gửi trước đó.")
-
-    for i, feed_url in enumerate(rss_feeds, 1):
-        print(f"Đang quét RSS {i}/{len(rss_feeds)}: {feed_url}")
-        feed = parse_rss_with_headers(feed_url)
-        if not feed or not getattr(feed, "entries", None):
-            print("  Không có bài viết nào từ RSS này.")
-            continue
-
-        for entry in feed.entries:
-            title = getattr(entry, "title", "")
-            summary = getattr(entry, "summary", "")
-            link = getattr(entry, "link", "")
-
-            if not title or not link:
-                continue
-
-            # Dùng link làm khóa duy nhất (ổn định)
-            hash_str = hashlib.md5(link.encode("utf-8")).hexdigest()
-            if hash_str in sent_hashes:
-                continue
-
-            if match_3_groups(title, summary, group1, group2, group3):
-                print(f"  Tìm thấy bài phù hợp: {title}")
-                print("  Đang tóm tắt nội dung bằng AI...")
-                article_summary = summarize_article_ai(link, max_sentences=10)
-
-                subject = f'THỜI BÁO KTKSKB - "{title}"'
-
-                safe_summary = (article_summary or "").replace("\n", "<br/>")
-
-                html_body = f"""
+def template_body(title: str, link: str, article_summary: str) -> str:
+    # Đổi format email body theo ý bạn tại đây (HTML)
+    safe_summary = (article_summary or "").replace("\n", "<br/>")
+    return f"""
 <div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.6; color: #111;">
   <p><em><strong>Kính gửi:</strong> Anh/Chị,</em></p>
 
@@ -291,10 +239,59 @@ def main():
 </div>
 """
 
+def send_email_smtp_html(subject: str, html_body: str, to_addr: str):
+    if not EMAIL_USER or not EMAIL_PASS:
+        raise RuntimeError("Thiếu EMAIL_USER/EMAIL_PASS trong ENV.")
+    msg = MIMEText(html_body, "html", _charset="utf-8")
+    msg["Subject"] = subject
+    msg["From"] = EMAIL_USER
+    msg["To"] = to_addr
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=60) as server:
+        server.starttls()
+        server.login(EMAIL_USER, EMAIL_PASS)
+        server.send_message(msg)
+
+# ------------------ Main ------------------
+def main():
+    print("Bắt đầu quét tin tức...")
+    if not EMAIL_USER or not EMAIL_PASS:
+        print("Thiếu EMAIL_USER/EMAIL_PASS trong ENV. Dừng.")
+        return
+
+    sent_hashes = load_sent_hashes()
+    print(f"Đã tải {len(sent_hashes)} hash bài đã gửi trước đó.")
+
+    for i, feed_url in enumerate(rss_feeds, 1):
+        print(f"Đang quét RSS {i}/{len(rss_feeds)}: {feed_url}")
+        feed = parse_rss_with_headers(feed_url)
+        if not feed or not getattr(feed, "entries", None):
+            print("  Không có bài viết nào từ RSS này.")
+            continue
+
+        for entry in feed.entries:
+            title = getattr(entry, "title", "")
+            summary = getattr(entry, "summary", "")
+            link = getattr(entry, "link", "")
+
+            if not title or not link:
+                continue
+
+            # Dùng link làm khóa duy nhất
+            hash_str = hashlib.md5(link.encode("utf-8")).hexdigest()
+            if hash_str in sent_hashes:
+                continue
+
+            if match_groups(title, summary, group1, group2):
+                print(f"  Tìm thấy bài phù hợp: {title}")
+                print("  Đang tóm tắt nội dung bằng AI...")
+                article_summary = summarize_article_ai(link, max_sentences=10)
+
+                subject = template_subject(title)
+                html_body = template_body(title, link, article_summary)
+
                 try:
                     send_email_smtp_html(subject, html_body, EMAIL_TO)
                     print("  ✓ Đã gửi cảnh báo thành công!")
-                    # Lưu hash vào Gist/local để lần sau không gửi lại
                     save_sent_hash(hash_str, sent_hashes)
                 except Exception as e:
                     print(f"  ✗ Lỗi gửi email: {e}")
