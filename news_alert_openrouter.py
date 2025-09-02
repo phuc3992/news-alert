@@ -56,7 +56,7 @@ rss_feeds = [
 
     # Thanh Niên
     "https://thanhnien.vn/rss/thoi-su.rss",
-    "https://thanhnien.vn/rss/phap-luat.rss",
+    "https://thanhnien.vn/rss/thoi-su/phap-luat.rss",
     "https://thanhnien.vn/rss/kinh-te.rss",
 
     # VOV
