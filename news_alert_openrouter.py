@@ -88,7 +88,7 @@ rss_feeds = [
 ]
 
 # ================== KEYWORD GROUPS ==================
-group1 = ["công ty", "doanh nghiệp", "vietinbank"]
+group1 = ["công ty", "doanh nghiệp", "vietinbank", "Chủ tịch", "Bí thư"]
 group2 = [
     "truy tố", "khởi tố", "tạm giam", "phá sản", "bị bắt", "qua đời", "bỏ trốn", "lừa đảo",
     "khám xét", "đánh bạc"
