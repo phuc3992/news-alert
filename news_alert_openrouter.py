@@ -11,7 +11,11 @@ from newspaper import Article
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 EMAIL_USER         = os.getenv("EMAIL_USER")            # ví dụ: you@gmail.com
 EMAIL_PASS         = os.getenv("EMAIL_PASS")            # Gmail App Password 16 ký tự
-EMAIL_TO           = os.getenv("EMAIL_TO", EMAIL_USER)
+EMAIL_TO           = os.getenv("EMAIL_TO", EMAIL_USER)  # có thể là "a@x.com,b@y.com,c@z.com"
+
+def parse_recipients(value: str):
+    # Tách theo dấu phẩy, bỏ khoảng trắng và lọc trống
+    return [e.strip() for e in (value or "").split(",") if e.strip()]
 
 # Gist để lưu hash bài đã gửi (tránh gửi lặp)
 GIST_TOKEN = os.getenv("GIST_TOKEN")                    # GitHub PAT (scope: gist)
@@ -240,17 +244,31 @@ def template_body(title: str, link: str, article_summary: str) -> str:
 </div>
 """
 
-def send_email_smtp_html(subject: str, html_body: str, to_addr: str):
+def send_email_smtp_html(subject: str, html_body: str, to_addrs, bcc_addrs=None):
+    """
+    Gửi email HTML với BCC để ẩn danh sách người nhận.
+    - to_addrs: list người nhận hiển thị (có thể để [])
+    - bcc_addrs: list người nhận ẩn (thực tế sẽ được gửi tới)
+    """
     if not EMAIL_USER or not EMAIL_PASS:
         raise RuntimeError("Thiếu EMAIL_USER/EMAIL_PASS trong ENV.")
+
+    to_addrs = to_addrs or []
+    bcc_addrs = bcc_addrs or []
+
     msg = MIMEText(html_body, "html", _charset="utf-8")
     msg["Subject"] = subject
     msg["From"] = EMAIL_USER
-    msg["To"] = to_addr
+    msg["To"] = ", ".join(to_addrs)
+    if bcc_addrs:
+        msg["Bcc"] = ", ".join(bcc_addrs)
+
+    rcpt_list = list(set(to_addrs + bcc_addrs))
+
     with smtplib.SMTP("smtp.gmail.com", 587, timeout=60) as server:
         server.starttls()
         server.login(EMAIL_USER, EMAIL_PASS)
-        server.send_message(msg)
+        server.sendmail(EMAIL_USER, rcpt_list, msg.as_string())
 
 # ------------------ Main ------------------
 def main():
@@ -261,6 +279,9 @@ def main():
 
     sent_hashes = load_sent_hashes()
     print(f"Đã tải {len(sent_hashes)} hash bài đã gửi trước đó.")
+
+    recipients = parse_recipients(EMAIL_TO)
+    print(f"Sẽ gửi BCC tới {len(recipients)} người nhận.")
 
     for i, feed_url in enumerate(rss_feeds, 1):
         print(f"Đang quét RSS {i}/{len(rss_feeds)}: {feed_url}")
@@ -291,7 +312,8 @@ def main():
                 html_body = template_body(title, link, article_summary)
 
                 try:
-                    send_email_smtp_html(subject, html_body, EMAIL_TO)
+                    # To để trống (hoặc đặt 1 địa chỉ chung nếu muốn), gửi thật qua BCC
+                    send_email_smtp_html(subject, html_body, to_addrs=[], bcc_addrs=recipients)
                     print("  ✓ Đã gửi cảnh báo thành công!")
                     save_sent_hash(hash_str, sent_hashes)
                 except Exception as e:
