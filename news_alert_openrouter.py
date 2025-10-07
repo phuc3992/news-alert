@@ -6,6 +6,7 @@ import feedparser
 import smtplib
 from email.mime.text import MIMEText
 from newspaper import Article
+import re
 
 # ================== ENV CONFIG ==================
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
@@ -216,31 +217,77 @@ def parse_rss_with_headers(feed_url: str):
         print(f"  Lỗi tải RSS {feed_url}: {e}")
         return None
 
-# ------------------ Email (template + gửi) ------------------
+# ------------------ Email (sanitize + template + gửi) ------------------
+def sanitize_summary(raw: str) -> str:
+    """
+    Làm sạch văn bản tóm tắt AI để tránh bị gạch ngang và lỗi hiển thị:
+    - Bỏ [BOT] [/BOT], đường gạch phân cách (---, ___, ===), thẻ <s>/<strike>
+    - Nếu đa số dòng dạng bullet/numbered -> render <ol><li>…</li></ol>
+    - Escape các ký tự HTML đặc biệt khi cần
+    """
+    if not raw:
+        return ""
+    text = raw.strip()
+
+    # Bỏ marker [BOT]
+    text = re.sub(r'\[/?BOT\]', '', text, flags=re.IGNORECASE).strip()
+
+    # Bỏ các đường gạch phân cách dài
+    text = re.sub(r'^\s*[-=_]{3,}\s*$', '', text, flags=re.MULTILINE)
+
+    # Bỏ thẻ s/strike
+    text = re.sub(r'</?\s*(s|strike)\s*>', '', text, flags=re.IGNORECASE)
+
+    # Phân tích dòng
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    bullet_like = sum(1 for l in lines if re.match(r'^(\d+\.\s+|[-•]\s+)', l))
+
+    def html_escape(s: str) -> str:
+        return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    if lines and bullet_like >= max(2, len(lines)//2):
+        normalized = []
+        for l in lines:
+            l = re.sub(r'^(\d+\.\s+|[-•]\s+)', '', l).strip()
+            normalized.append(html_escape(l))
+        items = ''.join(
+            f'<li style="margin:4px 0; text-decoration:none;">{l}</li>' for l in normalized
+        )
+        return f'<ol style="margin:6px 0 0 20px; padding:0; text-decoration:none;">{items}</ol>'
+
+    # Không phải bullet: escape và đổi \n -> <br/>
+    safe = html_escape(text)
+    return safe.replace('\n', '<br/>')
+
 def template_subject(title: str) -> str:
     # Bạn có thể đổi tiêu đề tại đây
     return f'THỜI BÁO KTKSNB - "{title}"'
 
 def template_body(title: str, link: str, article_summary: str) -> str:
-    # Đổi format email body theo ý bạn tại đây (HTML)
-    safe_summary = (article_summary or "").replace("\n", "<br/>")
+    # Làm sạch tóm tắt và ép style chống gạch ngang
+    safe_summary = sanitize_summary(article_summary)
     return f"""
-<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.6; color: #111;">
-  <p><em><strong>Kính gửi:</strong> Anh/Chị,</em></p>
+<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.6; color: #111; text-decoration: none;">
+  <style>
+    /* Một số client bỏ qua <style>, nhưng vẫn thêm để phòng */
+    * {{ text-decoration: none !important; }}
+    a {{ color: #1155cc; }}
+  </style>
 
-  <p>Tổ hiện đại hóa phòng KTKSNB kính gửi anh/chị thông tin bài báo:
+  <p style="text-decoration:none;"><em><strong>Kính gửi:</strong> Anh/Chị,</em></p>
+
+  <p style="text-decoration:none;">Tổ hiện đại hóa phòng KTKSNB kính gửi anh/chị thông tin bài báo:
      <strong>"{title}"</strong>
   </p>
 
-  <p><em><strong>Link bài báo:</strong></em><br/>
-     <a href="{link}" target="_blank" rel="noopener noreferrer">{link}</a>
+  <p style="text-decoration:none;"><em><strong>Link bài báo:</strong></em><br/>
+     <a href="{link}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">{link}</a>
   </p>
 
-  <p><em><strong>Tóm tắt:</strong></em><br/>
-     {safe_summary}
-  </p>
+  <p style="text-decoration:none;"><em><strong>Tóm tắt:</strong></em></p>
+  <div style="text-decoration:none;">{safe_summary}</div>
 
-  <p>Chúc Anh/Chị ngày làm việc hiệu quả 😊</p>
+  <p style="text-decoration:none;">Chúc Anh/Chị ngày làm việc hiệu quả 😊</p>
 </div>
 """
 
