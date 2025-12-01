@@ -1,0 +1,29 @@
+name: Keep Alive
+
+on:
+  schedule:
+    - cron: "0 2 1 * *"     # 02:00 UTC ngày 1 hàng tháng (≈ 09:00 VN)
+  workflow_dispatch:         # Cho phép chạy tay
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Touch keepalive
+        run: |
+          date +"%Y-%m-%d %H:%M:%S UTC" > .keepalive
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .keepalive
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: keep workflow alive [skip ci]"
+            git push
+          else
+            echo "No changes"
+          fi
