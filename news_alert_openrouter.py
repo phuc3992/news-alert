@@ -176,11 +176,12 @@ def ai_summarize(text: str, max_sentences: int = 10) -> str:
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
     prompt = (
-        f"Bạn là biên tập viên báo Việt. Tóm tắt nội dung dưới đây bằng tiếng Việt, ngắn gọn khoảng {max_sentences} câu, "
-        f"giữ số liệu và tên riêng:\n\n{text}\n\nTóm tắt:"
+        f"Bạn là biên tập viên báo Việt. Hãy viết một đoạn văn tóm tắt nội dung dưới đây bằng tiếng Việt một cách tự nhiên, trôi chảy. "
+        f"Đoạn văn khoảng {max_sentences} câu, tập trung vào các tình tiết chính, giữ lại số liệu và tên riêng quan trọng. "
+        f"Không sử dụng gạch đầu dòng hay danh sách số.\n\n{text}\n\nTóm tắt:"
     )
     data = {
-        "model": "mistralai/mistral-7b-instruct",
+        "model": "meta-llama/llama-3.1-8b-instruct",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 800,
         "temperature": 0.2,
@@ -191,7 +192,11 @@ def ai_summarize(text: str, max_sentences: int = 10) -> str:
             js = r.json()
             return js["choices"][0]["message"]["content"].strip()
         else:
-            return f"Không tóm tắt được bằng AI (HTTP {r.status_code})."
+            try:
+                detail = r.json()
+            except Exception:
+                detail = r.text[:300]
+            return f"Không tóm tắt được bằng AI (HTTP {r.status_code}). Detail: {detail}"
     except Exception as e:
         return f"Không tóm tắt được bằng AI ({e})."
 
@@ -220,43 +225,25 @@ def parse_rss_with_headers(feed_url: str):
 # ------------------ Email (sanitize + template + gửi) ------------------
 def sanitize_summary(raw: str) -> str:
     """
-    Làm sạch văn bản tóm tắt AI để tránh bị gạch ngang và lỗi hiển thị:
-    - Bỏ [BOT] [/BOT], đường gạch phân cách (---, ___, ===), thẻ <s>/<strike>
-    - Nếu đa số dòng dạng bullet/numbered -> render <ol><li>…</li></ol>
-    - Escape các ký tự HTML đặc biệt khi cần
+    Làm sạch văn bản tóm tắt AI để hiển thị dạng đoạn văn tự nhiên trong email
     """
     if not raw:
         return ""
     text = raw.strip()
 
-    # Bỏ marker [BOT]
+    # Loại bỏ các marker không cần thiết
     text = re.sub(r'\[/?BOT\]', '', text, flags=re.IGNORECASE).strip()
-
-    # Bỏ các đường gạch phân cách dài
     text = re.sub(r'^\s*[-=_]{3,}\s*$', '', text, flags=re.MULTILINE)
+    
+    # Loại bỏ các dấu sao (markdown bold) nếu bạn không muốn chữ bị đậm quá nhiều
+    text = text.replace("**", "")
 
-    # Bỏ thẻ s/strike
-    text = re.sub(r'</?\s*(s|strike)\s*>', '', text, flags=re.IGNORECASE)
-
-    # Phân tích dòng
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    bullet_like = sum(1 for l in lines if re.match(r'^(\d+\.\s+|[-•]\s+)', l))
-
-    def html_escape(s: str) -> str:
-        return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-    if lines and bullet_like >= max(2, len(lines)//2):
-        normalized = []
-        for l in lines:
-            l = re.sub(r'^(\d+\.\s+|[-•]\s+)', '', l).strip()
-            normalized.append(html_escape(l))
-        items = ''.join(
-            f'<li style="margin:4px 0; text-decoration:none;">{l}</li>' for l in normalized
-        )
-        return f'<ol style="margin:6px 0 0 20px; padding:0; text-decoration:none;">{items}</ol>'
-
-    # Không phải bullet: escape và đổi \n -> <br/>
-    safe = html_escape(text)
+    # Chuyển đổi xuống dòng thành thẻ <br/> để giữ khoảng cách đoạn văn trong email
+    safe = (text
+            .replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;'))
+    
     return safe.replace('\n', '<br/>')
 
 def template_subject(title: str) -> str:
